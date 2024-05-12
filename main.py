@@ -4,6 +4,10 @@ import sqlite3
 import tkinter.messagebox
 from PIL import Image, ImageTk
 from tkinter import messagebox
+from tkinter import PhotoImage, Label
+
+
+
 
 
 
@@ -33,12 +37,48 @@ def create_tables():
                  title TEXT NOT NULL,
                  description TEXT NOT NULL,
                  ingredients TEXT NOT NULL,
-                 duration TEXT NOT NULL,
+                 duration INTEGER NOT NULL,
                  recipe_id INTEGER NOT NULL,
                  step_number INTEGER NOT NULL,
                  FOREIGN KEY (recipe_id) REFERENCES recipes(id))''')
     conn.commit()
     conn.close()
+
+
+# Δημιουργία παραθύρου
+root = tk.Tk()
+root.title("Συνταγογράφος")
+root.geometry("1920x1080")
+
+# Επιλογή δημιουργίας ή αναζήτηση συνταγής
+def select_function(function):
+    if function == "Δημιουργία Νέας Συνταγής":
+        create_recipe_window()
+    elif function == "Αναζήτηση Συνταγής":
+        search_recipe_window()
+
+
+# Φόρτωση της φωτογραφίας
+image_path = "mageiriki3.jpg"
+image = Image.open(image_path)
+photo = ImageTk.PhotoImage(image)
+
+# Δημιουργία ετικέτας για την εικόνα και τοποθέτηση στο κέντρο του παραθύρου
+label = tk.Label(root, image=photo)
+label.place(relx=0.5, rely=0.5, anchor="center")
+
+# Δημιουργία βάσης δεδομένων κατά την εκκίνηση
+create_tables()
+
+# Ετικέτες για τις διαθέσιμες λειτουργίες
+function_label = tk.Label(root, text="Επιλέξτε μια λειτουργία:")
+function_label.pack(pady=5)
+
+functions = ["Δημιουργία Νέας Συνταγής", "Αναζήτηση Συνταγής"]
+for function in functions:
+    button = tk.Button(root, text=function, command=lambda f=function: select_function(f), bg="lightpink")
+    button.pack(side="top", fill="x", pady=5)
+
 
 
 def create_recipe_window():
@@ -50,8 +90,29 @@ def create_recipe_window():
     conn = sqlite3.connect('recipes.db')
     c = conn.cursor()
 
+
+
     def submit_recipe():
+        changes_made = False  # Flag για να ελέγχουμε αν έχουν γίνει αλλαγές
+
         try:
+            total_time = time_entry.get()
+            if not total_time.isdigit():
+                raise ValueError("Ο συνολικός χρόνος πρέπει να είναι αριθμητικός.")
+
+            total_time = int(total_time)
+
+            steps_duration = sum([int(entry[3].get()) for entry in step_entries])
+            if not str(steps_duration).isdigit():
+                raise ValueError("Η διάρκεια των βημάτων πρέπει να είναι αριθμητική.")
+
+            steps_duration = int(steps_duration)
+
+            if total_time != steps_duration:
+                raise ValueError("Το άθροισμα της διάρκειας των βημάτων δεν είναι ίσο με τον συνολικό χρόνο.")
+
+            changes_made = True  # Οι αλλαγές έχουν γίνει με επιτυχία
+
             # Προσθήκη εγγραφής στον πίνακα recipes
             c.execute("INSERT INTO recipes (name, category, difficulty, total_time) VALUES (?, ?, ?, ?)",
                       (recipe_name_entry.get(), category_entry.get(), difficulty_entry.get(), time_entry.get()))
@@ -79,11 +140,23 @@ def create_recipe_window():
             # Κλείσιμο του παραθύρου μετά την επιτυχή αποθήκευση
             recipe_window.destroy()
             tkinter.messagebox.showinfo("Επιτυχία", "Η συνταγή αποθηκεύτηκε με επιτυχία!")
+
+
+        except ValueError as ve:
+
+            if changes_made and conn:  # Αν έχουν γίνει αλλαγές και η σύνδεση είναι ανοιχτή
+
+                conn.rollback()
+
+            tkinter.messagebox.showerror("Σφάλμα", str(ve))
+
         except Exception as e:
-            conn.rollback()  # Αν υπάρξει κάποιο σφάλμα, ανατρέπουμε τις αλλαγές
+
+            if changes_made and conn:  # Αν έχουν γίνει αλλαγές και η σύνδεση είναι ανοιχτή
+
+                conn.rollback()
+
             tkinter.messagebox.showerror("Σφάλμα", f"Αποτυχία αποθήκευσης της συνταγής: {str(e)}")
-        finally:
-            conn.close()
 
     # Πλαίσιο
     main_frame = ttk.Frame(recipe_window, padding="20")
@@ -161,12 +234,17 @@ def create_recipe_window():
     add_step_button = ttk.Button(steps_frame, text="Προσθήκη Βήματος", command=add_step_entry)
     add_step_button.grid(column=1, row=30, pady=5)
 
+
     # Κέντραρισμός του παραθύρου
-    window_width = recipe_window.winfo_reqwidth()
-    window_height = recipe_window.winfo_reqheight()
+    window_width = 1200  # Πλάτος παραθύρου
+    window_height = 700  # Ύψος παραθύρου
+
     position_right = int(recipe_window.winfo_screenwidth() / 2 - window_width / 2)
     position_down = int(recipe_window.winfo_screenheight() / 2 - window_height / 2)
-    recipe_window.geometry("+{}+{}".format(position_right, position_down))
+
+    recipe_window.geometry("{}x{}+{}+{}".format(window_width, window_height, position_right, position_down))
+
+
 
 
 # Αναζήτηση συνταγών
@@ -220,6 +298,10 @@ def search_recipe():
             result_label.config(text=result_label.cget("text") + "\n")  # Κενή γραμμή μεταξύ συνταγών
 
 
+
+
+
+
 # Συνάρτηση για το παράθυρο αναζήτησης συνταγών
 def search_recipe_window():
     search_window = tk.Toplevel(root)
@@ -245,12 +327,17 @@ def search_recipe_window():
     result_label = tk.Label(result_frame, text="")
     result_label.pack()
 
+
+
+
     # Κέντραρισμός του παραθύρου
     window_width = search_window.winfo_reqwidth()
     window_height = search_window.winfo_reqheight()
     position_right = int(search_window.winfo_screenwidth() / 2 - window_width / 2)
     position_down = int(search_window.winfo_screenheight() / 2 - window_height / 2)
     search_window.geometry("+{}+{}".format(position_right, position_down))
+
+
 
 
 
@@ -343,6 +430,13 @@ def edit_recipe(recipe_id):
             conn = sqlite3.connect('recipes.db')
             c = conn.cursor()
 
+            # Έλεγχος του συνολικού χρόνου και της συνολικής διάρκειας των βημάτων
+            total_time = int(edit_time_entry.get())
+            steps_total_duration = sum(int(entry[3].get()) for entry in step_entries)
+
+            if total_time != steps_total_duration:
+                raise ValueError("Ο συνολικός χρόνος δεν είναι ίσος με τη συνολική διάρκεια των βημάτων")
+
             # Ενημέρωση της εγγραφής στον πίνακα recipes
             c.execute("UPDATE recipes SET name=?, category=?, difficulty=?, total_time=? WHERE id=?",
                       (edit_recipe_name_entry.get(), edit_category_entry.get(), edit_difficulty_entry.get(),
@@ -403,17 +497,72 @@ def edit_recipe(recipe_id):
 
     c.execute("SELECT * FROM steps WHERE recipe_id=? ORDER BY step_number", (recipe_id,))
     steps = c.fetchall()
+    def delete_step(index):
+        # Διαγραφή των widgets του σχετικού βήματος
+        for widget in steps_frame.grid_slaves():
+            if int(widget.grid_info()["row"]) == index:
+                widget.grid_forget()
+        # Αφαίρεση του βήματος από τη λίστα step_entries
+        del step_entries[index]
 
+    def add_ingredient():
+        idx = len(ingredient_entries)  # Αριθμός του νέου υλικού
+        ttk.Label(ingredient_frame, text=f"Υλικό {idx + 1}:").grid(column=0, row=idx, sticky=tk.W)
+        entry = ttk.Entry(ingredient_frame, width=30)
+        entry.grid(column=1, row=idx, sticky=tk.W)
+        ingredient_entries.append(entry)
+
+        # Κουμπί διαγραφής του συγκεκριμένου υλικού
+        delete_button = ttk.Button(ingredient_frame, text="Διαγραφή",
+                                   command=lambda index=idx: delete_ingredient(index))
+        delete_button.grid(column=2, row=idx, sticky=tk.W)
+
+    def delete_ingredient(index):
+        del ingredient_entries[index]  # Διαγραφή του συγκεκριμένου υλικού από τη λίστα
+        for widget in ingredient_frame.winfo_children():  # Αφαίρεση όλων των widgets από το πλαίσιο
+            widget.grid_forget()
+        # Επανασχεδίαση των widgets εισαγωγής υλικών
+        for i, entry in enumerate(ingredient_entries):
+            ttk.Label(ingredient_frame, text=f"Υλικό {i + 1}:").grid(column=0, row=i, sticky=tk.W)
+            entry.grid(column=1, row=i, sticky=tk.W)
+            delete_button = ttk.Button(ingredient_frame, text="Διαγραφή", command=lambda idx=i: delete_ingredient(idx))
+            delete_button.grid(column=2, row=i, sticky=tk.W)
+
+    def add_step():
+        i = len(step_entries)
+        ttk.Label(steps_frame, text=f"Βήμα {i + 1}:").grid(column=0, row=i, sticky=tk.W)
+        title_entry = ttk.Entry(steps_frame, width=30)
+        title_entry.grid(column=1, row=i, sticky=tk.W)
+
+        ttk.Label(steps_frame, text="Περιγραφή:").grid(column=2, row=i, sticky=tk.W)
+        description_entry = ttk.Entry(steps_frame, width=50)
+        description_entry.grid(column=3, row=i, sticky=tk.W)
+
+        ttk.Label(steps_frame, text="Υλικά:").grid(column=4, row=i, sticky=tk.W)
+        ingredients_entry = ttk.Entry(steps_frame, width=30)
+        ingredients_entry.grid(column=5, row=i, sticky=tk.W)
+
+        ttk.Label(steps_frame, text="Διάρκεια (ώρες:λεπτά):").grid(column=6, row=i, sticky=tk.W)
+        duration_entry = ttk.Entry(steps_frame, width=10)
+        duration_entry.grid(column=7, row=i, sticky=tk.W)
+
+        delete_button = ttk.Button(steps_frame, text="Διαγραφή", command=lambda index=i: delete_step(index))
+        delete_button.grid(column=8, row=i, sticky=tk.W)
+
+        step_entries.append((title_entry, description_entry, ingredients_entry, duration_entry))
+
+    # Κουμπί προσθήκης υλικού
+    add_ingredient_button = ttk.Button(edit_window, text="Προσθήκη Υλικού", command=add_ingredient)
+    add_ingredient_button.grid(column=0, row=8, columnspan=2, pady=5)
+
+    # Κουμπί προσθήκης βήματος
+    add_step_button = ttk.Button(edit_window, text="Προσθήκη Βήματος", command=add_step)
+    add_step_button.grid(column=0, row=9, columnspan=2, pady=5)
     # Πλήθος συνολικών βημάτων
     num_steps = len(steps)
 
     # Πεδία εισαγωγής για τα υλικά
-    global ingredient_entries
     ingredient_entries = []
-
-    # Πεδία εισαγωγής για τα βήματα
-    global step_entries
-    step_entries = []
 
     # Δημιουργία πεδίων εισαγωγής για τα υλικά
     for i, ingredient in enumerate(ingredients):
@@ -422,6 +571,26 @@ def edit_recipe(recipe_id):
         entry.grid(column=1, row=i, sticky=tk.W)
         entry.insert(0, ingredient[1])  # Εισαγωγή του τρέχοντος ονόματος του υλικού
         ingredient_entries.append(entry)
+
+        # Δημιουργία κουμπιού διαγραφής για το συγκεκριμένο υλικό
+        delete_button = ttk.Button(ingredient_frame, text="Διαγραφή", command=lambda index=i: delete_ingredient(index))
+        delete_button.grid(column=2, row=i, sticky=tk.W)
+
+    # Συνάρτηση για τη διαγραφή ενός υλικού
+    def delete_ingredient(index):
+        del ingredient_entries[index]  # Διαγραφή του συγκεκριμένου υλικού από τη λίστα
+        for widget in ingredient_frame.winfo_children():  # Αφαίρεση όλων των widgets από το πλαίσιο
+            widget.grid_forget()
+        # Επανασχεδίαση των widgets εισαγωγής υλικών
+        for i, entry in enumerate(ingredient_entries):
+            ttk.Label(ingredient_frame, text=f"Υλικό {i + 1}:").grid(column=0, row=i, sticky=tk.W)
+            entry.grid(column=1, row=i, sticky=tk.W)
+            delete_button = ttk.Button(ingredient_frame, text="Διαγραφή", command=lambda idx=i: delete_ingredient(idx))
+            delete_button.grid(column=2, row=i, sticky=tk.W)
+
+    # Πεδία εισαγωγής για τα βήματα
+    global step_entries
+    step_entries = []
 
     # Δημιουργία πεδίων εισαγωγής για τα βήματα
     for i, step in enumerate(steps):
@@ -445,7 +614,13 @@ def edit_recipe(recipe_id):
         duration_entry.grid(column=7, row=i, sticky=tk.W)
         duration_entry.insert(0, step[4])  # Εισαγωγή της τρέχουσας διάρκειας του βήματος
 
+        # Κουμπί διαγραφής βήματος
+        delete_button = ttk.Button(steps_frame, text="Διαγραφή", command=lambda index=i: delete_step(index))
+        delete_button.grid(column=8, row=i, sticky=tk.W)
+
         step_entries.append((title_entry, description_entry, ingredients_entry, duration_entry))
+
+
 
     # Κέντραρισμός του παραθύρου
     edit_window.update_idletasks()
@@ -455,144 +630,86 @@ def edit_recipe(recipe_id):
     y = (edit_window.winfo_screenheight() // 2) - (height // 2)
     edit_window.geometry('{}x{}+{}+{}'.format(width, height, x, y))
 
-    # Κουμπί διαγραφής υλικού
-    delete_ingredient_button = ttk.Button(ingredient_frame, text="Διαγραφή",
-                                          command=lambda: delete_ingredient(recipe_id, ingredient_selection.current()))
-    delete_ingredient_button.grid(column=5, row=0, padx=5, pady=5)
-
-    # Κουμπί διαγραφής βήματος
-    delete_step_button = ttk.Button(steps_frame, text="Διαγραφή",
-                                     command=lambda: delete_step(recipe_id, step_selection.current()))
-    delete_step_button.grid(column=10, row=0, padx=5, pady=5)
-
-    # Πεδίο επιλογής υλικού για διαγραφή
-    ingredient_selection = ttk.Combobox(ingredient_frame, values=[f"Υλικό {i + 1}" for i in range(len(ingredients))])
-    ingredient_selection.grid(column=4, row=0, padx=5, pady=5)
-
-    # Πεδίο επιλογής βήματος για διαγραφή
-    step_selection = ttk.Combobox(steps_frame, values=[f"Βήμα {i + 1}" for i in range(len(steps))])
-    step_selection.grid(column=9, row=0, padx=5, pady=5)
-
-    # Κλείσιμο σύνδεσης με τη βάση δεδομένων
-    conn.close()
-
-def delete_ingredient(recipe_id, ingredient_id):
-    conn = sqlite3.connect('recipes.db')
-    c = conn.cursor()
-
-    try:
-        c.execute("DELETE FROM ingredients WHERE recipe_id=? AND id=?", (recipe_id, ingredient_id))
-        conn.commit()
-        messagebox.showinfo("Επιτυχία", f"Το υλικό με ID {ingredient_id} διαγράφηκε επιτυχώς!")
-    except Exception as e:
-        conn.rollback()
-        messagebox.showerror("Σφάλμα", f"Αποτυχία διαγραφής του υλικού με ID {ingredient_id}: {str(e)}")
-    finally:
-        conn.close()
-
-def delete_step(recipe_id, step_number):
-    conn = sqlite3.connect('recipes.db')
-    c = conn.cursor()
-
-    try:
-        c.execute("DELETE FROM steps WHERE recipe_id=? AND step_number=?", (recipe_id, step_number))
-        conn.commit()
-        messagebox.showinfo("Επιτυχία", f"Το βήμα με αριθμό {step_number} διαγράφηκε επιτυχώς!")
-    except Exception as e:
-        conn.rollback()
-        messagebox.showerror("Σφάλμα", f"Αποτυχία διαγραφής του βήματος με αριθμό {step_number}: {str(e)}")
-    finally:
-        conn.close()
-
-
-
-
-
-
 
 # Εκτέλεση συνταγής
 def execute_recipe(recipe_id):
+    # Συνάρτηση για ενημέρωση των πληροφοριών του τρέχοντος βήματος
+    def update_step_info(step_index):
+        if step_index < len(steps):
+            step = steps[step_index]
+            title_label.config(text=f"Βήμα {step_index + 1}: {step[0]}")
+            description_label.config(text=f"Περιγραφή: {step[1]}")
+            ingredients_label.config(text=f"Υλικά: {step[2]}")
+            duration_label.config(text=f"Διάρκεια: {step[3]}")
+            progress_var.set(int((step_index + 1) / len(steps) * 100))
+            if step_index == len(steps) - 1:
+                next_button.config(text="Ολοκλήρωση")
+
+    # Συνάρτηση για τη μετάβαση στο επόμενο βήμα
+    def next_step():
+        nonlocal current_step_index
+        current_step_index += 1
+        if current_step_index == len(steps):
+            messagebox.showinfo("Ολοκλήρωση", "Η συνταγή ολοκληρώθηκε επιτυχώς!")
+            recipe_window.destroy()
+        else:
+            update_step_info(current_step_index)
+
+    # Συνδέση με τη βάση δεδομένων
     conn = sqlite3.connect('recipes.db')
     c = conn.cursor()
 
-    # Επιλογή των βημάτων της συνταγής με βάση το recipe_id
-    c.execute("SELECT * FROM steps WHERE recipe_id=?", (recipe_id,))
+    # Λήψη των βημάτων και των υλικών της συνταγής από τη βάση δεδομένων
+    c.execute("SELECT title, description, ingredients, duration FROM steps WHERE recipe_id=?", (recipe_id,))
     steps = c.fetchall()
-    total_steps = len(steps)
 
-    # Αρχικοποίηση του ποσοστού ολοκλήρωσης
-    completion_percentage = 0
+    if not steps:
+        messagebox.showerror("Σφάλμα", "Δεν βρέθηκαν βήματα για τη συνταγή με ID: " + str(recipe_id))
+        return
 
-    # Εκτύπωση των στοιχείων του πρώτου βήματος
-    if steps:
-        first_step = steps[0]
-        title, description, ingredients, duration, recipe_id = first_step
-        print("Βήμα 1:")
-        print("Τίτλος:", title)
-        print("Υλικά:", ingredients)
-        print("Χρόνος:", duration)
+    # Δημιουργία παραθύρου GUI για την εκτέλεση της συνταγής
+    recipe_window = tk.Toplevel()
+    recipe_window.title("Εκτέλεση Συνταγής")
 
-        # Υπολογισμός του ποσοστού ολοκλήρωσης βάσει του χρόνου του πρώτου βήματος
-        completion_percentage += int(duration) / total_time * 100
+    # Ετικέτες για τα υλικά και τα βήματα
+    title_label = ttk.Label(recipe_window, text="")
+    title_label.pack(anchor=tk.W, padx=10, pady=5)
 
-    # Εκτύπωση του ποσοστού ολοκλήρωσης
-    print("Ποσοστό Ολοκλήρωσης: {:.2f}%".format(completion_percentage))
+    description_label = ttk.Label(recipe_window, text="")
+    description_label.pack(anchor=tk.W, padx=10, pady=5)
 
-    # Επανάληψη για τα υπόλοιπα βήματα
-    for i in range(1, total_steps):
-        next_step = steps[i]
-        title, description, ingredients, duration, _ = next_step
-        print("\nΕπόμενο Βήμα:")
-        print("Τίτλος:", title)
-        print("Υλικά:", ingredients)
-        print("Χρόνος:", duration)
+    ingredients_label = ttk.Label(recipe_window, text="")
+    ingredients_label.pack(anchor=tk.W, padx=10, pady=5)
 
-        # Υπολογισμός του ποσοστού ολοκλήρωσης βάσει του χρόνου του επόμενου βήματος
-        completion_percentage += int(duration) / total_time * 100
-        print("Ποσοστό Ολοκλήρωσης: {:.2f}%".format(completion_percentage))
+    duration_label = ttk.Label(recipe_window, text="")
+    duration_label.pack(anchor=tk.W, padx=10, pady=5)
 
-        # Εκτύπωση επιπλέον πληροφοριών ή ερωτήσεων προς τον χρήστη, όπως ζητήθηκε
-        # Εδώ μπορείτε να εμφανίσετε οτιδήποτε θέλετε για τον χρήστη να κάνει σε κάθε βήμα
-        input("Πατήστε Enter για να προχωρήσετε στο επόμενο βήμα...")
+    # Πρόοδος στην εκτέλεση της συνταγής
+    progress_var = tk.DoubleVar()
+    progress_bar = ttk.Progressbar(recipe_window, orient=tk.HORIZONTAL, length=200, mode='determinate', variable=progress_var)
+    progress_bar.pack(pady=10)
 
-    conn.close()
+    # Κουμπί για την πρόοδο στο επόμενο βήμα
+    next_button = ttk.Button(recipe_window, text="Επόμενο Βήμα", command=next_step)
+    next_button.pack(pady=10)
 
-
-# Επιλογή δημιουργίας ή αναζήτηση συνταγής
-def select_function(function):
-    if function == "Δημιουργία Νέας Συνταγής":
-        create_recipe_window()
-    elif function == "Αναζήτηση Συνταγής":
-        search_recipe_window()
+    # Αρχικοποίηση του πρώτου βήματος
+    current_step_index = 0
+    update_step_info(current_step_index)
 
 
 
+    # Αρχική τοποθέτηση του παραθύρου στο κέντρο της οθόνης
+    window_width = 500
+    window_height = 300
+    screen_width = recipe_window.winfo_screenwidth()
+    screen_height = recipe_window.winfo_screenheight()
+    x_coordinate = int((screen_width - window_width) / 2)
+    y_coordinate = int((screen_height - window_height) / 2)
+    recipe_window.geometry(f'{window_width}x{window_height}+{x_coordinate}+{y_coordinate}')
+    recipe_window.update_idletasks()
 
 
-# Δημιουργία παραθύρου
-root = tk.Tk()
-root.title("Συνταγογράφος")
-root.geometry("1000x800")
-root.geometry("1000x800+{}+{}".format(root.winfo_screenwidth() // 2 - 500,
-                                      root.winfo_screenheight() // 2 - 400))  # κεντραρισμα εκκίνησης
 
-#Φόρτωση της φωτογραφίας
-image_path = "mageiriki3.jpg"
-image = Image.open(image_path)
-global photo
-photo = ImageTk.PhotoImage(image)
-
-# Δημιουργία ετικέτας για την εικόνα και τοποθέτησή της στην αρχική οθόνη
-label = tk.Label(root, image=photo)
-label.pack()
-
-# Δημιουργία βάσης δεδομένων κατά την εκκίνηση
-create_tables()
-
-# Ετικέτες για τις διαθέσιμες λειτουργίες
-tk.Label(root, text="Επιλέξτε μια λειτουργία:").pack(pady=5)
-functions = ["Δημιουργία Νέας Συνταγής", "Αναζήτηση Συνταγής"]
-for function in functions:
-    tk.Button(root, text=function, command=lambda f=function: select_function(f)).pack()
 
 root.mainloop()
